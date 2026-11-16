@@ -3276,7 +3276,7 @@
       if (s.x < v.x0 - 1 || s.x > v.x1 + 1 || s.y < v.y0 - 1 || s.y > v.y1 + 1) { out[i] = null; continue; }
       let hh = CM.Metro.levelH(s.type, CM.Metro.stationLevel(s)); if (hh < 0) hh = hh * under * UNDER_DEPTH;
       const o = objs[i]; this.P(s.x, s.y, hh, o);
-      o.r = R0 * (s.size === 'S' ? 0.8 : s.size === 'XL' ? 1.5 : s.size === 'L' ? 1.3 : 1) * (rs.inter[i] ? 1.4 : 1); o.id = s.id;
+      o.r = R0 * (s.size === 'S' ? 0.8 : s.size === 'HUB' ? 1.8 : s.size === 'XXL' ? 1.65 : s.size === 'XL' ? 1.5 : s.size === 'L' ? 1.3 : 1) * (rs.inter[i] ? 1.4 : 1); o.id = s.id;
       out[i] = o;
     }
   };
@@ -3362,7 +3362,7 @@
       const s = C.stations[i];
       if (s.x < v.x0 - 1 || s.x > v.x1 + 1 || s.y < v.y0 - 1 || s.y > v.y1 + 1) continue;
       const h = stH(s), p = this.P(s.x, s.y, h, tmp), lines = C.stationLines[i], inter = rs.inter[i] === 1;
-      const r = R0 * (s.size === 'S' ? 0.8 : s.size === 'XL' ? 1.5 : s.size === 'L' ? 1.3 : 1) * (inter ? 1.4 : 1), serviced = C.serviced[i];
+      const r = R0 * (s.size === 'S' ? 0.8 : s.size === 'HUB' ? 1.8 : s.size === 'XXL' ? 1.65 : s.size === 'XL' ? 1.5 : s.size === 'L' ? 1.3 : 1) * (inter ? 1.4 : 1), serviced = C.serviced[i];
       let alpha = 1;
       if (hlLine && !lines.has(hlLine)) alpha = 0.35;
       alpha *= lyrDim;
@@ -3397,7 +3397,7 @@
       const e = this.stationSprite(C, i, s, h, r, lw, rs.inter[i], lines, LS, serviced, rs);
       if (e) { const k = r / e.b, hw = e.half * k; ctx.drawImage(e.cv, e.sx, e.sy, e.sw, e.sh, p.x - hw, p.y - hw, hw * 2, hw * 2); }
       else this.paintStationCore(ctx, C, i, s, p, h, r, lw, inter, lines, LS, serviced);
-      const todLv = g.net.stations[s.id] ? g.net.stations[s.id].tod || 0 : 0;
+      const todLv = g.net.stations[s.id] && CM.TOD ? CM.TOD.projectCount(g.net.stations[s.id]) : 0;
       if (todLv && serviced) this.drawTodMark(ctx, p.x, p.y, r, inter ? Math.max(2.2, r * 0.3) : Math.max(1.8, r * 0.36), todLv);
       if (lvs && lvs.length > 1 && serviced) levelBadge(ctx, p.x + r * 0.85, p.y - r * 0.85, Math.max(12, r * 1.4), lvs, TH.stInter);
     }
@@ -4175,8 +4175,8 @@
     const list = [];
     if (ui) for (const id in g.net.stations) {
       const I = ui.todInfo(id); if (!I) continue;
-      if (I.lv) list.push({ id: id, lv: I.lv, net: I.net(I.lv) });
-      else list.push({ id: id, lv: 0, net: I.net(1) });
+      const n = CM.TOD.projectCount(I.s);
+      if (n) list.push({ id: id, lv: n, net: I.bizRev - I.bizCost });
     }
     this._todL = { key: key, list: list };
     return list;
@@ -4710,7 +4710,7 @@
   // 立体视图中按站台层画简易模型，沿站台方向、长度按车站规模：地下站为站体轮廓与两处出入口亭，地面站为站台、雨棚与站房，
   // 高架站为桥墩上的站房与地面出入口；屋面带一道线路色。设置「车站模型」可关闭；地下视图与远景不画。
   // 画在三维地图叠加层上：按屏幕空间判断只画朝向镜头的侧面
-  const SM_LEN = { S: 0.28, M: 0.36, L: 0.46, XL: 0.46 }, SM_M = EX;   // 半长（格）；米 → 世界单位
+  const SM_LEN = { S: 0.28, M: 0.36, L: 0.46, XL: 0.5, XXL: 0.56, HUB: 0.64 }, SM_M = EX;   // 半长（格）；米 → 世界单位
   const hexRgb = function (c) { const m = /^#?([0-9a-f]{6})$/i.exec(String(c)); if (!m) return [120, 132, 150]; const v = parseInt(m[1], 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
   const mixRgb = function (a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; };
   const fillXY = function (ctx, q, col) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); for (let i = 1; i < q.length; i++) ctx.lineTo(q[i].x, q[i].y); ctx.closePath(); ctx.fill(); };
@@ -4751,7 +4751,7 @@
     if (!C.serviced[i] && !(g.draft && !g.net.stations[s.id])) return list;
     const src = (ds && ds[s.id]) || g.net.stations[s.id] || s, dc = src.decor || null, look = dc && DECOR_LOOK[dc.style];
     const era = look ? look.era : CM.Agents.eraOf(Math.max((s.built && s.built[0]) || y, y - 40, src.renov || 0));
-    const deco = { pal: look ? look.pal : era, tc: dc && dc.color ? hexRgb(dc.color) : null, art: dc && dc.art !== 'none' ? dc.art : null, sign: (dc && dc.sign) || 'std', tod: src.tod || 0 };
+    const deco = { pal: look ? look.pal : era, tc: dc && dc.color ? hexRgb(dc.color) : null, art: dc && dc.art !== 'none' ? dc.art : null, sign: (dc && dc.sign) || 'std', tod: src && CM.TOD ? CM.TOD.projectCount(src) : 0 };
     for (const p of Renderer.platformsOf(net, s, Array.from(C.stationLines[i] || []))) {
       const L = p.lid && net.lines[p.lid];
       list.push(Object.assign({ i: i, s: s, t: p.t, a: p.a, off: p.off, lead: p.lead, first: p.first, era: era, col: L ? hexRgb(AX.line(L)) : [120, 132, 150] }, deco));
@@ -4875,7 +4875,7 @@
     }
     ctx.restore();
   };
-  const MT_HALF = { surface: 0.11, elevated: 0.07 }, ST_LEN = { S: 0.3, M: 0.4, L: 0.5, XL: 0.5 }, ST_HALF = 0.09, MT_STEP = 0.06;
+  const MT_HALF = { surface: 0.11, elevated: 0.07 }, ST_LEN = { S: 0.3, M: 0.4, L: 0.5, XL: 0.58, XXL: 0.66, HUB: 0.76 }, ST_HALF = 0.09, MT_STEP = 0.06;
   // net 中地面 / 高架的轨道与车站占用的子地块：Map(格 → 16 位掩码)。only(id, kind) 返回 false 的对象跳过
   Renderer.prototype.metroMaskOf = function (net, only) {
     const city = this.game.city, MT = CM.Metro, W = city.W, H = city.H, mask = new Map();
@@ -5280,7 +5280,7 @@
       let ord = ix && ix.C === C ? ix.lblOrder : null;
       if (!ord) {
         ord = Array.from({ length: C.stations.length }, function (_, i) { return i; });
-        const SZ = { L: 2, M: 1, S: 0 };
+        const SZ = { HUB: 5, XXL: 4, XL: 3, L: 2, M: 1, S: 0 };
         ord.sort(function (a, b) { return (C.stationLines[b].size - C.stationLines[a].size) || (SZ[C.stations[b].size] - SZ[C.stations[a].size]) || (a - b); });
         if (ix && ix.C === C) ix.lblOrder = ord;
       }

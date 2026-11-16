@@ -707,11 +707,13 @@
         if (ns > bestN) { bestN = ns; best = id; }
         id++;
       }
-      if (best >= 0) break;
+      if (best >= 0 && !D.multipleStartAreas) break;
     }
     // 旧存档兼容：已有车站所在的连片同样可以建设（见 keepLegacyOpen）
     const keep = new Set([best]);
-    if (D.multipleStartAreas) for (let c = 0; c < N; c++) {
+    if (D.multipleStartAreas) {
+      for (let c = 0; c < N; c++) if (el[c] && comp[c] >= 0) keep.add(comp[c]);
+    } else for (let c = 0; c < N; c++) {
       if (seed[c] && comp[c] >= 0) keep.add(comp[c]);
     }
     for (const c of this.legacySeeds || []) {

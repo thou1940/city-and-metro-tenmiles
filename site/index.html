@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -44,9 +44,9 @@
   <div class="hero">
     <div class="wrap hero-grid">
       <div>
-        <span class="eyebrow"><i class="dot"></i> 非商业社区修改版 · Starry 版 1.3.1</span>
+        <span class="eyebrow"><i class="dot"></i> 非商业社区修改版 · Starry 版 2.0</span>
         <h1>在真实城市里，<br><span class="accent">画出你自己的地铁</span></h1>
-        <p class="hero-sub">在原版的客流模拟、线网规划与城市经营之上，新增八座城市剧本、扩展广州与上海外围走廊，整合 v2.7 引擎并为全部地图复核史实、票价与热点地区；「先规划全线、再分段开通、运营后持续调整」始终是完整的操作流程。</p>
+        <p class="hero-sub">在原版的客流模拟、线网规划与城市经营之上，新增八座城市剧本、扩展广州外围，重做上海区划与人口，整合 v2.7 引擎并为全部地图复核史实、票价与热点地区；「先规划全线、再分段开通、运营后持续调整」始终是完整的操作流程。</p>
         <p class="hero-note">原作由 VinsonFung 开发 · 本站为非官方社区修改版</p>
         <div class="hero-actions">
           <a class="btn btn-primary" data-play href="../">打开游戏 <span class="arrow">→</span></a>
@@ -106,7 +106,7 @@
       <div class="stat"><b>19</b><span>可游玩地图</span></div>
       <div class="stat"><b>8</b><span>社区自制城市剧本</span></div>
       <div class="stat"><b>2</b><span>外围走廊扩图</span></div>
-      <div class="stat"><b>1.3.1</b><span>最新版本 · 已上线</span></div>
+      <div class="stat"><b>2.0</b><span>最新版本 · 已上线</span></div>
     </div>
   </div>
 
@@ -160,8 +160,8 @@
         </article>
         <article class="city">
           <span class="flag flag-ext">扩图</span>
-          <div class="yr">广州 · 上海</div><h3>外围走廊补充</h3>
-          <p>广州延伸至佛山核心区、花都、从化城区、增城与南沙，补上黄埔至增城建设走廊；上海补充嘉定、青浦、松江、金山、奉贤、临港及昆山方向。</p>
+          <div class="yr">广州 · 上海</div><h3>上海区划与人口补充</h3>
+          <p>广州延伸至佛山核心区、花都、从化城区、增城与南沙，补上黄埔至增城建设走廊；上海补充嘉定、青浦、松江、金山、奉贤、临港、昆山、太仓及嘉兴方向，并补齐人口中心。</p>
           <div class="bar"><i style="background:var(--orange)"></i><i style="background:var(--blue)"></i><i style="background:var(--purple)"></i></div>
         </article>
       </div>
@@ -191,7 +191,7 @@
       <div class="feat-grid">
         <div class="feat"><div class="num" style="background:var(--red)">01</div><h3>草案与分段开通</h3><p>草案按线路归组并显示区段预算，由玩家选择先建哪些新建区段；同一条线可从不同端推进，自动编号避开已使用的线路名。</p></div>
         <div class="feat"><div class="num" style="background:var(--blue)">02</div><h3>车站与区间改造</h3><p>调整车站平面位置与标高，已建车站改造需付费；增加大型枢纽扩容，并允许在同一站间区段设置地下、地面与高架之间的高程变化。</p></div>
-        <div class="feat"><div class="num" style="background:var(--green)">03</div><h3>商业与列车管理</h3><p>车站总览查看商业预测并批量开发选中车站；列车界面集中显示可用车型与各线配车，可开启每月自动购买缺失列车。</p></div>
+        <div class="feat"><div class="num" style="background:var(--green)">03</div><h3>商业与列车管理</h3><p>车站总览查看商业项目收益，在车站详情「商业开发」中建设；列车界面集中显示可用车型与各线配车，可开启每月自动购买缺失列车。</p></div>
         <div class="feat"><div class="num" style="background:var(--orange)">04</div><h3>客流与自动命名</h3><p>车站详情分列进站、出站与站内换乘，展示站外换乘的步行距离、预计时间与客流。中国城市自动站名优先选用合适的道路名，社区名作为后备。</p></div>
         <div class="feat"><div class="num" style="background:var(--purple)">05</div><h3>票价与财政核对</h3><p>逐图核对开局票价、里程票制、起始资金与月拨款，按各城史实开局单独校准；保留社区版口径，不跟随原版 2.7 的整套经济重平衡。</p></div>
         <div class="feat"><div class="num" style="background:var(--navy)">06</div><h3>地图细节与验证</h3><p>OSM 底图绘制道路、岸线与地标；19 张地图逐图通过史实、票价、热点地区与引用完整性校验，并用无头浏览器全图开档验收。</p></div>
@@ -240,9 +240,27 @@
       <div class="sec-head">
         <span class="sec-kicker">CHANGELOG</span>
         <h2>版本记录</h2>
-        <p class="sec-desc">最新 1.3.1 加入铁路运营权，改进车队调度，并校准广州与重庆。</p>
+        <p class="sec-desc">最新 2.0 加入三种线路制式、六种站厅类型、按线路设置的站台编组和八类商业改造项目。</p>
       </div>
       <div class="log-list">
+        <div class="log-item">
+          <div class="log-meta">
+            <div class="log-ver">2.0</div>
+            <div class="log-date">2026-11-15</div>
+            <span class="log-badge badge-rel">RELEASE</span>
+          </div>
+          <div class="log-body">
+            <h3>线路制式、站厅类型与商业改造</h3>
+            <ul>
+              <li>线路分为普通地铁（60/80/120 km/h，4/6/8 节）、市域铁路（120/160/200 km/h，8/10/12 节）与高速铁路（250/350/400 km/h，8/16 节）；制式决定车长、定员、站台档位、转弯半径与土建单价。</li>
+              <li>车站总体规模改为「站厅类型」六档；市域铁路要求大及以上，高速铁路要求巨大及以上。</li>
+              <li>每个车站在每条线路上直接选择站台编组：地铁 4/6/8、市域 8/10/12、高铁 8/16 节，不再填写米数。</li>
+              <li>线路、站台与车辆严格匹配：购车、调车与自动配车按制式筛选，编组不能超过沿线最短站台编组。</li>
+              <li>高铁转弯半径要求降到原来的不到四分之一，线形更容易布置。</li>
+              <li>取消原 TOD 分级开发，只保留八类商业改造项目，并重新校准投入、收益与维护成本。</li>
+            </ul>
+          </div>
+        </div>
         <div class="log-item">
           <div class="log-meta">
             <div class="log-ver">1.3.1</div>
@@ -324,7 +342,7 @@
           <div class="log-body">
             <h3>社区版工作总结（作者原文）</h3>
             <div class="log-group"><h4>地图与城市剧本</h4><ul>
-              <li>新增新加坡、深圳、南京、苏州、纽约五座城市，扩展广州与上海外围走廊，使用 OpenStreetMap 数据并按剧本配置历史事件与枢纽需求。</li>
+              <li>新增新加坡、深圳、南京、苏州、纽约五座城市，扩展广州外围，重做上海区划与人口，使用 OpenStreetMap 数据并按剧本配置历史事件与枢纽需求。</li>
             </ul></div>
             <div class="log-group"><h4>建设与运营功能</h4><ul>
               <li>草案与分段开通、车站与区间改造、商业与列车管理、客流与命名、票价与财政五方面改进。</li>

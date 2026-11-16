@@ -113,7 +113,7 @@
     const n = netInfo(g);
     if (n.first && !(g.mapInit && g.mapInit.metro)) {
       const tp = n.first.tp, a = g.net.stations[tp.stations[0]], b = g.net.stations[tp.stations[tp.stations.length - 1]];
-      add(g, 'first-line', { cat: 'metro', icon: 'train', big: true, title: (D.city || '城市') + '第一条地铁开通', desc: n.first.L.name + (a && b ? ' ' + a.name + '—' + b.name : '') + '，' + tp.stations.length + ' 座车站' });
+      add(g, 'first-line', { cat: 'metro', icon: 'train', big: true, title: (D.city || '城市') + '第一条' + CM.Metro.lineSys(n.first.L).name + '开通', desc: n.first.L.name + (a && b ? ' ' + a.name + '—' + b.name : '') + '，' + tp.stations.length + ' 座车站' });
     }
     if (n.xfer) add(g, 'first-xfer', { cat: 'metro', icon: 'network', title: '第一座换乘站', desc: '「' + n.xfer.name + '」连接 ' + M.stationLines(g.net, n.xfer.id).map(function (l) { return g.net.lines[l].name; }).join('、') });
     if (g.mapId === 'sh') recordShCrossings(g, false);

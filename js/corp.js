@@ -120,7 +120,7 @@
       let E = 0, n = 0; const seen = new Set();
       for (const r of C.routes) if (r.lineId === x.lid) for (const k of r.stIdx) {
         const s = C.stations[k], tbl = CFG.cost.station[s.type] || CFG.cost.station.underground;
-        if (s.size !== 'L' && s.size !== 'XL' && !seen.has(k)) { seen.add(k); E += (tbl.L - tbl[s.size]) * ci; n++; }
+        if (CM.Std.sizeIndex(s.size) < CM.Std.sizeIndex('L') && !seen.has(k)) { seen.add(k); E += (tbl.L - tbl[s.size]) * ci; n++; }
       }
       if (E <= 0) continue;
       return { line: x.lid, lf: x.lf, cars: x.cars, n: n, est: Math.round(E * 1.1 / 1000) * 1000 };
@@ -134,7 +134,7 @@
       let t = null;
       if (kind === 'line') {
         const c = lineCand(g, P, ctx); if (!c) continue;
-        const tod = rng.next() < (CFG.economy.todTender || 0.3), type = tod ? 'tod' : 'line', F = forecast(g, ctx, c.area);
+        const tod = false, type = 'line', F = forecast(g, ctx, c.area);
         if (!tod && F <= 0) continue;
         t = { type: type, area: c.area, anchors: c.anchors, zone: c.z, est: c.est, buildM: c.buildM, forecast: F,
           title: '「' + c.area.name + '」' + (tod ? '铁路＋物业项目' : '新线 PPP 项目'),

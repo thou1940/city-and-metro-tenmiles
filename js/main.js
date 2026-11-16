@@ -169,7 +169,7 @@
     canvas.classList.add('map-in');   // 快速进入游戏时，菜单背景任务可能尚未执行
     CM.agents.reset();
     tools.tool = 'select'; tools.chain = null; tools.bends = []; tools.lineChoice = 'new';
-    tools.newLineColor = null; tools.newLineSpeed = null; tools.clearMeasure();
+    tools.newLineColor = null; tools.newLineSpeed = null; tools.newLineSys = null; tools.newLineCars = null; tools.clearMeasure();
     tools.drag = tools.ptr = tools.cursor = tools.hover = tools.hint = tools.snapPt = tools.mouse = tools.portalHover = null;
     tools.lineLock = false; tools.keys.clear(); tools.keyMods = {};
     if (tools.touches) tools.touches.clear(); tools.pinch = null;

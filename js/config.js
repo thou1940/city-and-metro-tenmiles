@@ -3,7 +3,7 @@
 (function (CM) {
   CM.CFG = {
     GAME_VERSION: '2.7.0',  // Engine and save metadata version.
-    COMMUNITY_VERSION: '1.3.1',
+    COMMUNITY_VERSION: '2.0.0',
     TRAFFIC_MODEL: 4,      // 轻量交通更新；与显示版本独立，确保 v3 存档仍触发安全迁移
     RULES_REVISION: 7,     // 保持 7：社区版未改存档结构，避免对旧档触发规则升级迁移
     SAVE_FORMAT: 'city-metro-save',
@@ -89,13 +89,14 @@
       vmax: { underground: 22, surface: 19, elevated: 22 },  // m/s
       accel: 0.9, dwell: 30, turnaround: 150,
       latAccel: 0.8,            // 弯道横向加速度上限 → 弯道限速
-      carCap: 310,              // 每节车厢定员
-      carsBySize: { S: 4, M: 6, L: 8, XL: 8 }, // 列车编组受沿线最小站台限制
+      carCap: 310,              // 每节车厢定员（各制式另有 carCap，见 systems）
       fMin: [8, 6, 8, 4],       // 各时段最低发车频率（列/小时）DEFAULT
       fMax: 30,                 // 最小间隔 2 分钟
       targetLF: 0.85,
-      stationCap: { S: 15000, M: 35000, L: 70000, XL: 150000 }, // 车站每小时进出站+换乘能力 DEFAULT
+      stationCap: { S: 15000, M: 35000, L: 70000, XL: 120000, XXL: 200000, HUB: 320000 }, // 车站每小时进出站+换乘能力 DEFAULT
       minSpacingM: 100,         // 独立车站最小间距；站外换乘仍按实际步行路径上限判断
+      // 站台长度按米计费（万元/米，1990 年价格；再乘制式倍率与物价指数）
+      platPerM: { underground: 55, elevated: 30, surface: 15 },
       // 线形约束（参考城市轨道交通设计规范的量级，DEFAULT）
       minRadiusM: 250,          // 正线最小曲线半径：低于此值不允许
       warnRadiusM: 400,         // 低于此值需限速通过
@@ -106,15 +107,50 @@
         { kmh: 100, minR: 400, warnR: 650, ops: 1.12, track: 0.15 },
         { kmh: 120, minR: 600, warnR: 1000, ops: 1.25, track: 0.3 },
         { kmh: 160, minR: 1000, warnR: 2400, ops: 1.45, track: 0.55 },
+        { kmh: 200, minR: 1800, warnR: 3200, ops: 1.6, track: 0.75 },
+        { kmh: 250, minR: 2600, warnR: 4200, ops: 1.75, track: 0.95 },
+        { kmh: 350, minR: 4000, warnR: 6500, ops: 2.05, track: 1.3 },
+        { kmh: 400, minR: 5500, warnR: 9000, ops: 2.3, track: 1.6 },
       ],
+      // 线路制式（社区扩展）：普通地铁 / 市域铁路 / 高速铁路。
+      // consists 为可选编组（节），platLens 为对应站台长度（米）；每条线路用其中一组，车站可以按线路单独设置。
+      systems: {
+        metro: {
+          id: 'metro', name: '普通地铁', short: '地铁', tone: '#2b649c',
+          desc: '城市大运量地铁，60–120 km/h，4/6/8 节编组',
+          carLenM: 22.5, carCap: 310, consists: [4, 6, 8], platLens: [90, 140, 180], defaultPlat: 140,
+          speeds: [60, 80, 120], defaultSpeed: 80,
+          buildTypes: ['underground', 'surface', 'elevated'], minHall: 'S',
+          radiusMul: 1, costMul: { underground: 1, surface: 1, elevated: 1 }, stationMul: 1, platCostMul: 1,
+          unlockYear: 0,
+        },
+        regional: {
+          id: 'regional', name: '市域铁路', short: '市域', tone: '#2f8f6b',
+          desc: '连接郊区与主城的市域铁路，120–200 km/h，8/10/12 节编组；车站需大及以上站厅',
+          carLenM: 25, carCap: 300, consists: [8, 10, 12], platLens: [200, 250, 300], defaultPlat: 200,
+          speeds: [120, 160, 200], defaultSpeed: 120,
+          buildTypes: ['underground', 'surface', 'elevated'], minHall: 'L',
+          radiusMul: 1.6, costMul: { underground: 1.25, surface: 1.1, elevated: 1.15 }, stationMul: 1.35, platCostMul: 1.25,
+          unlockYear: 1950,
+        },
+        hsr: {
+          id: 'hsr', name: '高速铁路', short: '高铁', tone: '#b1433c',
+          desc: '高速铁路级别的线路，250–400 km/h，8/16 节编组；车站需巨大及以上站厅，转弯半径要求已降到原来的不到四分之一',
+          carLenM: 25, carCap: 150, consists: [8, 16], platLens: [200, 400], defaultPlat: 200,
+          speeds: [250, 350, 400], defaultSpeed: 250,
+          buildTypes: ['underground', 'surface', 'elevated'], minHall: 'XL',
+          radiusMul: 0.75, costMul: { underground: 2.2, surface: 1.8, elevated: 2 }, stationMul: 2, platCostMul: 2.2,
+          unlockYear: 1964,
+        },
+      },
       maxTurnAtStationDeg: 60,  // 车站前后线路方向最大偏转（站台为直线段）
       maxTurnArcDeg: 120,       // 圆弧线形（v2.6.1）的上限：弯道都在站台之外，能否通过由半径决定
-      platformHalfM: 70,        // 站台直线段半长
+      platformHalfM: 70,        // 站台直线段半长（几何建模尺度；实际站台长度见 station.pf / line.plat）
       maxGrade: 0.03,           // 最大坡度（地下/地面/高架转换坡道）
       levelM: { underground: -15, surface: 0, elevated: 12 }, // 轨面高程（米）
       levelFactor: 0.6,         // 天地换乘：同站增设另一层站台按该建设方式车站造价的 60% 计（共用站厅与出入口）DEFAULT
       levelXferMin: 1.5,        // 天地换乘：进出非主站台层多走的垂直通道时间（分钟，上下车各计一次）DEFAULT
-      sizeName: { S: '小型', M: '中型', L: '大型', XL: '超大型枢纽' },
+      sizeName: { S: '小', M: '中', L: '大', XL: '巨大', XXL: '超级大', HUB: '中央枢纽' },
       typeName: { underground: '地下', surface: '地面', elevated: '高架' },
       height: { underground: -0.11, surface: 0.0, elevated: 0.075 }, // 视觉高度（格）
     },
@@ -129,10 +165,12 @@
       // 跨越地面铁路（每处）：按本城单价折算的等效长度（km）。地下线下穿需加固与监测，高架线需上跨铁路的大跨度桥
       railCrossKm: { underground: 0.25, elevated: 0.35 },
       station: {
-        underground: { S: 15000, M: 25000, L: 40000 },
-        elevated: { S: 8000, M: 13000, L: 20000 },
-        surface: { S: 5000, M: 8000, L: 12000 },
+        underground: { S: 15000, M: 25000, L: 40000, XL: 72000, XXL: 104000, HUB: 152000 },
+        elevated: { S: 8000, M: 13000, L: 20000, XL: 36000, XXL: 52000, HUB: 76000 },
+        surface: { S: 5000, M: 8000, L: 12000, XL: 21600, XXL: 31200, HUB: 45600 },
       },
+      // 站台长度造价（万元/米，1990 年价格）：按站台建设方式、站台类型倍率与制式倍率计
+      platPerM: { underground: 55, elevated: 30, surface: 15 },
       upgradeFactor: 1.2,
       demolishPerCell: 30000,   // 拆迁一个完全开发街区的费用（按开发强度折算）
       demolishFactor: {
@@ -147,7 +185,7 @@
 
     ops: {
       carKmCost: 0.0009,        // 万元/车厢公里（≈9 元）
-      stationDaily: { S: 1.5, M: 2.6, L: 4.5 }, // 万元/天
+      stationDaily: { S: 1.5, M: 2.6, L: 4.5, XL: 8.1, XXL: 11.7, HUB: 17.1 }, // 万元/天
       serviceHours: 18,
       inflation: 0.04,
     },

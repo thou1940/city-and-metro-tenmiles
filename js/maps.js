@@ -46,9 +46,11 @@
   CM.autoZone = autoZone;
   function addHubPrices(cfg) {
     const station = {};
-    for (const [type, prices] of Object.entries(cfg.cost.station)) station[type] = Object.assign({}, prices, { XL: prices.L * 1.8 });
+    for (const [type, prices] of Object.entries(cfg.cost.station)) station[type] = Object.assign({}, prices, { XL: prices.L * 1.8, XXL: prices.L * 2.6, HUB: prices.L * 3.8 });
     cfg.cost = Object.assign({}, cfg.cost, { station });
-    cfg.ops = Object.assign({}, cfg.ops, { stationDaily: Object.assign({}, cfg.ops.stationDaily, { XL: cfg.ops.stationDaily.L * 1.8 }) });
+    cfg.ops = Object.assign({}, cfg.ops, { stationDaily: Object.assign({}, cfg.ops.stationDaily, {
+      XL: cfg.ops.stationDaily.L * 1.8, XXL: cfg.ops.stationDaily.L * 2.6, HUB: cfg.ops.stationDaily.L * 3.8,
+    }) });
   }
   addHubPrices(GZ_CFG);
   for (const m of CM.MAP_LIST || []) {

@@ -58,7 +58,7 @@
     acts.push({ icon: 'layers', label: '规模与站台', fn: function () { ui.openObj('station', id, 'build'); } });
     // 运营车站的商业开发与装修主题（v2.3）：在小气泡里直接完成，不必进详情页
     if (game().net.stations[id]) {
-      if (ui.todInfo(id)) acts.push({ icon: 'bag', label: '商业开发（TOD）', fn: function (b) { popTod(id, b); } });
+      if (ui.todInfo(id)) acts.push({ icon: 'bag', label: '商业开发', fn: function () { ui.openObj('station', id, 'tod'); } });
       acts.push({ icon: 'palette', label: '车站装修', fn: function (b) { popDecor(id, b); } });
     }
     acts.push({ icon: 'cursor', label: '移动车站', fn: function () { ui.tools.setTool('edit'); ui.select({ kind: 'station', id: id }); ui.toast('拖动车站到新位置', 'info'); } });
@@ -299,7 +299,7 @@
     const g = game(), n = net(), sg = n.segments[segId]; if (!sg) return;
     const geo = M.segGeom(n, sg, g.city), body = h('div');
     const tc = h('div', { class: 'seg-ctl' });
-    for (const t of ['underground', 'surface', 'elevated']) tc.appendChild(h('button', { class: sg.type === t ? 'on' : '', 'data-tip': '约 ' + U.fmtMoney(M.trackCost(geo, t, g.clock.y)), onclick: function () { const c = net().segments[segId]; if (c && c.type !== t) g.edit(function (x) { const s2 = x.segments[segId], co = M.coTrackSegs(x, s2); s2.type = t; M.syncCoTrack(x, s2, co); }); closePop(); } }, CFG.metro.typeName[t]));
+    for (const t of ['underground', 'surface', 'elevated']) tc.appendChild(h('button', { class: sg.type === t ? 'on' : '', 'data-tip': '约 ' + U.fmtMoney(M.trackCost(geo, t, g.clock.y, M.lineSystem(n.lines[sg.line] || {}))), onclick: function () { const c = net().segments[segId]; if (c && c.type !== t) g.edit(function (x) { const s2 = x.segments[segId], co = M.coTrackSegs(x, s2); s2.type = t; M.syncCoTrack(x, s2, co); }); closePop(); } }, CFG.metro.typeName[t]));
     const cc = h('div', { class: 'seg-ctl' });
     for (const cv of [['smooth', '平滑'], ['pass', '穿点']]) cc.appendChild(h('button', { class: !!sg.curve === (cv[0] === 'smooth') ? 'on' : '', onclick: function () { const c = net().segments[segId]; if (c && !!c.curve !== (cv[0] === 'smooth')) g.edit(function (x) { const s2 = x.segments[segId], co = M.coTrackSegs(x, s2); if (cv[0] === 'smooth') s2.curve = 'arc'; else delete s2.curve; M.syncCoTrack(x, s2, co); }); closePop(); } }, cv[1]));
     body.append(h('div', { class: 'qpop-k' }, '建设方式（改建按新建计费）'), tc, h('div', { class: 'qpop-k' }, '线形'), cc,

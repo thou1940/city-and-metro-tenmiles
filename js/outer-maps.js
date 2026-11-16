@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // The original scenario coordinates are shifted only after the original map has been authored.
 (function (CM) {
   const spec = {
@@ -56,23 +56,29 @@
     const at = (lon,lat) => { const [x,y] = xy(lon,lat); return {x,y}; };
     const box = (w,s,e,n) => [xy(w,n),xy(e,n),xy(e,s),xy(w,s)];
     const oldW = m.cfg.W, oldH = m.cfg.H;
+    const oneMap = m.geo === geo;   // 上海已改为单张 384×368 底图，不再做旧图拼接
+    const legacyRegionIds = ((m.extent && m.extent.oldRegionIds) || []).slice();
     const portal = m.id === 'sh' ? 'sh_pvgair' : 'gz_newair';
-    m.extent = [
-      Object.assign({},m.extent,{newW:oldW,newH:oldH}),
-      { from:2, dx,dy, oldW,oldH, newZone:8, retirePortal:portal, note:'外围扩展至' + title,
-        oldRegionIds:[...d.regions.map(r=>r.id),d.defaultRegion.id], oldLandmarkIds:d.landmarks.map(l=>l.id) },
-    ];
-    m.mapVersion = 3;
+    if (!oneMap) {
+      m.extent = [
+        Object.assign({},m.extent,{newW:oldW,newH:oldH}),
+        { from:2, dx,dy, oldW,oldH, newZone:8, retirePortal:portal, note:'外围扩展至' + title,
+          oldRegionIds:Array.from(new Set(legacyRegionIds.concat((d.regions || []).map(r=>r.id), [d.defaultRegion.id]))).filter(Boolean), oldLandmarkIds:d.landmarks.map(l=>l.id) },
+      ];
+    }
+    m.mapVersion = oneMap ? 3 : 3;
     m.cfg = Object.assign({},m.cfg,{W:geo.w,H:geo.h,ZONE:8});
-    m.cam = Object.assign({},m.cam,{cx:m.cam.cx+dx,cy:m.cam.cy+dy});
+    if (!oneMap) m.cam = Object.assign({},m.cam,{cx:m.cam.cx+dx,cy:m.cam.cy+dy});
     m.facts[0][1] = geo.w/4 + ' km × ' + geo.h/4 + ' km';
-    m.features.push(['map','外围扩展',title]);
-    shiftData(d,dx,dy);
-    const expandedDistricts = m.id === 'gz' ? new Set([
-      '禅城区','南海区','顺德区','桂城街道','大沥镇','里水镇','狮山镇',
-      '陈村镇','北滘镇','伦教街道','大良街道','容桂街道','乐从镇','龙江镇','勒流街道','杏坛镇','均安镇',
-    ]) : null;
-    mergeNames(geo,old,dx,dy,expandedDistricts);
+    if (!oneMap) m.features.push(['map','外围扩展',title]);
+    if (!oneMap) {
+      shiftData(d,dx,dy);
+      const expandedDistricts = m.id === 'gz' ? new Set([
+        '禅城区','南海区','顺德区','桂城街道','大沥镇','里水镇','狮山镇',
+        '陈村镇','北滘镇','伦教街道','大良街道','容桂街道','乐从镇','龙江镇','勒流街道','杏坛镇','均安镇',
+      ]) : null;
+      mergeNames(geo,old,dx,dy,expandedDistricts);
+    }
     m.geo = geo; d.places = geo.places;
     const addPlaces = (rows) => {
       for (const [name,lon,lat,pop,jobs] of rows) {
@@ -84,6 +90,19 @@
     const addZones = rows => {
       d.regions.unshift(...rows.map(([id,name,open,plan,pop,bounds,demography]) =>
         ({id,name,open,plan,pop,poly:box(...bounds),demography:demography || townGrowth})));
+    };
+    // 取真实行政区/街道边界（geo.admin 原始编码），用于替代 addZones 的矩形。
+    const adminPolys = name => {
+      const out = [];
+      for (const r of geo.admin || []) {
+        if (geo.names[r[1]] !== name) continue;
+        for (let k = 2; k < r.length; k++) {
+          const flat = CM.Geo.dec(r[k], 1), pts = [];
+          for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
+          out.push(pts);
+        }
+      }
+      return out.length ? out : null;
     };
     const hub = (id,name,type,lon,lat,year,pax,w=225,depth=120) => {
       d.landmarks.push({id,name,kind:type==='air'?'airport':'rail',year,w,d:depth,h:22,...at(lon,lat)});
@@ -98,23 +117,69 @@
       d.runways = (d.runways || []).concat(candidates.map((r,i) => ({...r,from:years[i] ?? years.at(-1)})));
     };
     if (m.id === 'sh') {
-      addZones([
-        ['sh-kunshan','昆山与花桥',2006,'newtown',18e6,[120.94,31.30,121.16,31.45], { initial: 0.15, early: 0.23, mature: 0.65 }],
-        ['sh-jiading','嘉定与安亭',1997,'newtown',13.1e6,[121.15,31.24,121.35,31.46], { initial: 0.17, early: 0.25, mature: 0.70 }],
-        ['sh-qingpu','青浦、朱家角与赵巷',2000,'newtown',15e6,[121.00,31.05,121.30,31.23], { initial: 0.10, early: 0.20, mature: 0.60 }],
-        ['sh-songjiang','松江新城与九亭',1997,'newtown',13.5e6,[121.15,30.99,121.32,31.16]],
-        ['sh-jinshan','金山卫与石化',2000,'ind',17e6,[121.21,30.706,121.44,30.83]],
-        ['sh-fengxian','奉贤南桥',2000,'newtown',15.5e6,[121.40,30.88,121.59,31.02]],
-        ['sh-lingang','临港新城与滴水湖',2003,'newtown',18e6,[121.75,30.86,121.95,31.02]],
-        ['sh-pvg','浦东国际机场',1999,'port',11e6,[121.77,31.10,121.87,31.19]],
-      ]);
+      
+	  
+      // ext 设施最终会被投影到地图边缘；W 出口的经度、N 出口的纬度应填边缘附近的值。
+      const TrainExit = function (id, n, lon, lat, dir, km, open, pax, note) {
+        const pos = xy(lon, lat);
+        d.facilities.push({
+          id: id,
+          n: n,
+          t: 'rail',
+          ext: [dir, km],
+          at: [pos[0], pos[1]],
+          y0: open,
+          pax: pax,
+          note: note
+        });
+      };
+      // 京沪高铁从虹桥向西北经苏州北、南京北上；在西缘几乎正西出图，用 W 而不是 NW。
+      TrainExit('sh_hsr_jinghu', '京沪高铁·西向出口', 120.9325, 31.361, 'W', 6, [2011, 6], [[2011.3, 4], [2020, 8]], '京沪高铁往苏州北、南京、北京方向。');
+      // 沪昆高铁向西南经松江、嘉兴、杭州。
+      TrainExit('sh_hsr_hukun', '沪昆高铁·西南出口', 120.9325, 30.800, 'SW', 8, [2010, 10], [[2010.9, 4], [2030, 7]], '沪昆高铁往松江、嘉兴、杭州、昆明方向。');
+      // 沪苏湖高铁经练塘、湖州。
+      TrainExit('sh_hsr_hushuhang', '沪苏湖高铁·西向出口', 120.9325, 31.0525, 'W', 7, [2024, 12], [[2024.9, 2], [2030, 8]], '沪苏湖高铁往练塘、湖州方向。');
+      // 苏南沿江铁路从太仓、常熟方向北上。
+      TrainExit('sh_hsr_sunan', '苏南沿江铁路·北向出口', 121.1783, 31.5275, 'N', 6, [2023, 9], [[2023.8, 2], [2030, 6]], '苏南沿江铁路往太仓、常熟、张家港、南京方向。');
+      // 沪渝蓉高铁经太仓、崇明、南通北上。
+      TrainExit('sh_hsr_huyurong', '沪渝蓉高铁·北向出口', 121.430, 31.5275, 'N', 7, [2025, 6], [[2025.5, 3], [2035, 9]], '沪渝蓉高铁往太仓、南通、南京、武汉、成都方向。');
+      // 沪苏通铁路经太仓、常熟、南通。
+      TrainExit('sh_rail_hustong', '沪苏通铁路·北向出口', 121.1778, 31.5275, 'N', 7, [2020, 7], [[2020.6, 3], [2035, 6]], '沪苏通铁路往太仓、常熟、南通方向。');
+      // 沪乍杭铁路经金山、平湖、杭州。
+      TrainExit('sh_rail_huzhahang', '沪乍杭铁路·南向出口', 121.000, 30.696, 'S', 8, [2029, 12], [[2029.6, 2], [2040, 4]], '沪乍杭铁路往金山、平湖、杭州方向。');
+
+      // 区划统一来自 data_sh_regions.js；不再使用 addZones 的经纬度矩形。
+      const buildZone = function (r) {
+        const out = Object.assign({}, r);
+        const polys = [];
+        if (r.poly) {
+          if (typeof r.poly[0][0] === 'number') polys.push(r.poly);
+          else polys.push(...r.poly);
+        }
+        if (r.adminName || r.adminNames) {
+          const names = r.adminNames || [r.adminName];
+          for (const n of names) {
+            const got = adminPolys(n);
+            if (got) polys.push(...got);
+          }
+        }
+        if (polys.length) out.poly = polys;
+        else if (r.bounds) out.poly = box(...r.bounds);
+        return out;
+      };
+      d.regions = (CM.SH_REGIONS || []).map(buildZone);
+      // 崇明主体在地图北缘之外，保留一个区域标注，便于在图上识别。
+      d.mapLabels = (d.mapLabels || []).concat([['崇明区', ...xy(121.45, 31.515)]]);
       addPlaces([
-        ['嘉定北',121.235,31.391,16000,6500],['嘉定新城',121.255,31.330,19000,13000],['安亭',121.160,31.290,17000,18000],
+        ['嘉定北',121.235,31.391,16000,6500],['嘉定新城',121.255,31.330,19000,13000],['安亭',121.160,31.290,17000,18000],['南翔',121.322,31.277,18000,10000],['江桥',121.330,31.250,16000,12000],
         ['花桥',121.098,31.292,12000,9000],['昆山南站',120.957,31.353,20000,12000],['昆山城西',120.943,31.389,16000,13000],
+        ['太仓',121.130,31.450,22000,14000],['平湖',121.020,30.720,18000,12000],['嘉善',120.980,30.800,12000,8000],['崇明',121.400,31.500,12000,6000],
+        ['西岑科创中心',121.035,31.095,0,0],['华为练秋湖研发中心',121.020,31.080,0,0],['前滩',121.470,31.150,0,0],['东方体育中心',121.485,31.155,0,0],['南汇新城',121.800,30.910,0,0],
+        ['嘉定汽车城',121.160,31.290,0,0],['世博公园',121.490,31.180,0,0],['西虹桥',121.330,31.190,0,0],['徐泾',121.300,31.160,0,0],['东方绿舟',121.015,31.100,0,0],
         ['青浦新城',121.111,31.159,21000,11000],['朱家角',121.045,31.099,12000,7500],['赵巷',121.188,31.162,13000,8000],
-        ['松江新城',121.230,31.031,24000,14000],['松江大学城',121.234,31.054,17000,6500],['上海松江站',121.226,30.984,5000,6000],
+        ['松江新城',121.230,31.031,24000,14000],['上海松江站',121.226,30.984,5000,6000],
         ['金山卫',121.349,30.731,13000,16000],['金山石化',121.294,30.718,14000,17000],['奉贤新城',121.482,30.925,17000,12000],
-        ['惠南',121.761,31.054,22000,10000],['滴水湖',121.930,30.909,10000,12000],['浦东机场',121.804,31.152,2000,25000],
+        ['惠南',121.761,31.054,22000,10000],['滴水湖',121.930,30.909,10000,12000],['浦东机场',121.804,31.152,2000,25000],['九亭',121.315,31.135,18000,9000],['泗泾',121.270,31.110,15000,8000],['南桥',121.460,30.910,18000,12000],['周浦',121.570,31.110,20000,12000],['康桥',121.600,31.140,18000,10000],['唐镇',121.680,31.210,16000,11000],['曹路',121.700,31.280,15000,8000],['高桥',121.570,31.340,14000,12000],['川沙',121.700,31.190,18000,12000],['祝桥',121.750,31.110,14000,10000],['航头',121.580,31.060,13000,7000],['新场',121.650,31.030,12000,7000],['大团',121.750,30.970,10000,6000],['泥城',121.830,30.900,9000,9000],['书院',121.870,30.980,8000,7000],['万祥',121.810,30.950,8000,6000],['老港',121.830,31.040,7000,5000],
       ].filter(([,lon,lat]) => { const [x,y]=xy(lon,lat); return x>=0 && x<geo.w && y>=0 && y<geo.h; }));
       // 人民广场缺少原底图的独立站名点，复用已随扩图平移的任务位置。
       const square = d.histTasks.find(t => t.id === 'sh1').anchors.find(a => a.name === '人民广场');
@@ -125,7 +190,7 @@
       else d.places.unshift(['上海火车站', railStation.x, railStation.y, 0]);
       d.stationPlaces = d.places;
       hub('sh-kunshan-hub','昆山南站','rail',120.957,31.353,2010,[[2010,2],[2020,5]]);
-      d.placeYears = Object.assign({}, d.placeYears, { '松江大学城': 2001 });
+      
       hub('sh-songjiang-hub','上海松江站','rail',121.226,30.984,2010,[[2010,1.8],[2025,6]]);
       replaceAirport('浦东机场',121.804,31.152,[2005,1999,2008,2015,2017]);
       const event = d.events.find(e => e.title==='浦东国际机场启用');
@@ -245,7 +310,7 @@
       [[0,dy+oldH],[geo.w,dy+oldH],[geo.w,geo.h],[0,geo.h]],
     ];
     const edgeYears = m.id === 'gz' ? [2017,2010,2013,2021] : [1997,1997,1997,1997];
-    for (const [i,poly] of edge.entries()) d.regions.push({id:m.id+'-outer-'+i,name:'外围走廊',open:edgeYears[i],plan:'res',pop:m.id === 'gz' ? null : 15e6,poly,demography:corridorGrowth});
+    if (m.id !== 'sh') for (const [i,poly] of edge.entries()) d.regions.push({id:m.id+'-outer-'+i,name:'外围走廊',open:edgeYears[i],plan:'res',pop:m.id === 'gz' ? null : 15e6,poly,demography:corridorGrowth});
     if (m.id === 'gz') for (const region of d.regions) {
       if (region.id.startsWith('gz-') || region.id === 'foshan') region.earlyYears = 2;
     }

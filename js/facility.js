@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // 城市设施（v1.9）：重要设施（铁路客运站、机场、大学、医院、商圈、商务区、景点、公园、体育场馆、会展中心）
 // 按真实位置、启用/停用年份与规模单独参与出行需求（sim.js 中作为独立的出行目的地节点）；
 // 普通设施（中小学、社区商业、诊所、街区公园等）不逐个建模，按交通小区的用地、人口与岗位汇总（sim.js buildZones）。
@@ -18,6 +18,7 @@
     park: { name: '公园', icon: 'tree', p: { lz: 1 }, we: 1.15, L: 1.4, r: 1.0, group: '旅游休闲' },
     stadium: { name: '体育场馆', icon: 'stadium', p: { lz: 1 }, we: 1.3, L: 2.4, r: 0.6, group: '旅游休闲' },
     venue: { name: '会展中心', icon: 'expo', p: { sh: 0.6, lz: 0.4 }, we: 0.6, L: 2.4, r: 0.8, group: '商业' },
+    res: { name: '居民区', icon: 'home', p: { sh: 0.35, lz: 0.65 }, we: 0.85, L: 1.2, r: 0.8, group: '居住' },
   };
   const Fac = { TYPES: TYPES };
   CM.Fac = Fac;
@@ -90,6 +91,11 @@
     if (D._facSrc === D.facilities && D._fac && (!city || D._facCity === city)) return D._fac;
     const out = [];
     const lms = D.landmarks || [];
+    // 同名 OSM 地点用于校准手工设施的坐标。
+    const placeByName = new Map();
+    for (const p of (CM.GEO && CM.GEO.places) || []) {
+      if (p && p[0] && !placeByName.has(p[0])) placeByName.set(p[0], p);
+    }
     (D.facilities || []).forEach(function (s, i) {
       const T = TYPES[s.t]; if (!T) return;
       const f = { k: out.length, id: s.id || ('f' + i), name: s.n, label: s.label || s.n, t: s.t, T: T, x: 0, y: 0, r: s.r != null ? s.r : T.r, lmK: -1,
@@ -105,7 +111,12 @@
       } else if (s.at) { f.x = s.at[0]; f.y = s.at[1]; f.open = s.y0 != null ? yrOf(s.y0) : -1e9; }
       else return;
       if (f.open == null) f.open = -1e9;
-      if (city && f.lmK < 0 && !f.ext) snapToLand(f, city);
+      if (city && f.lmK < 0 && !f.ext && D.snapFacilities) {
+        // 手工设施坐标有偏差时，同名 OSM 地点在 40 格内则校正到真实点位。
+        const q = placeByName.get(f.name);
+        if (q && Math.hypot(q[1] - f.x, q[2] - f.y) < 40) { f.x = q[1]; f.y = q[2]; }
+        snapToLand(f, city);
+      }
       out.push(f);
     });
     if (city) genDistrict(out, city);
@@ -163,7 +174,7 @@
   }
   function genDistrict(out, city) {
     const CFG = CM.CFG, regs = city.regions || [];
-    if (D.fictional || !city.region) return;
+    if (D.fictional || !city.region || D.noAutoFacilities) return;
     const km = CFG.CELL_M / 1000, popRef = U.interp(CFG.growth.popCurve, CFG.growth.histEnd);
     regs.forEach(function (rg, k) {
       if (rg.scenic || rg.hub || rg.open == null || !rg.cells || rg.cx == null || rg === D.defaultRegion) return;   // 不含风景区、机场等枢纽、永久不开放的片区与「外围地区」
@@ -200,6 +211,18 @@
     if (D._fac === L && D._facById) return D._facById.get(id) || null;
     for (const f of L) if (f.id === id) return f;
     return null;
+  };
+  // 控制台校准工具：Fac.move('sh_xxx', x, y)，坐标为地图格。
+  Fac.move = function (id, x, y) {
+    const d = CM.curMap() && CM.curMap().data;
+    if (!d || !d.facilities) return null;
+    const s = d.facilities.find(function (f) { return f.id === id; });
+    if (!s) return null;
+    s.at = [x, y];
+    delete s.lm;
+    delete s.ext;
+    d._fac = null; d._facSrc = null; d._facCity = null;
+    return s;
   };
   // 是否在运营：启用年份之后、停用年份之前；引用地标的须地标已落成（填海等场地成陆后），其余须所在格为陆地
   Fac.active = function (f, yr, city) {

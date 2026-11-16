@@ -342,23 +342,22 @@
       ts(H, '资金与债务', '一般资金为负时需尽快扭亏（长期负余额会导致挑战失败）；建设专项资金只能用于建设', [{ name: '一般资金', color: P[3], vals: pick(H, 'funds').map(cv) }].concat(anyDebt ? [{ name: '建设专项资金', color: P[2], vals: pick(H, 'capex').map(cv) }, { name: '债务余额', color: P[6], vals: pick(H, 'debt').map(cv) }] : []), { fmt: fm, axisFmt: axisYi, area: !anyDebt, icon: 'coin', refs: [{ v: 0, label: '' }] }),
       lineChart({ title: '收入与支出', sub: (E.ledger.length > 36 ? '按年' : '按月') + '合计：财政收入 = 拨款 + 票款 + 车站商业 + 政府合同 + 奖励（借款不计入）；支出 = 建设 + 运营（含车站商业成本）+ 合同支出' + (anyDebt ? '；偿债 = 利息 + 本金 + 逾期费用' : ''), icon: 'wallet', labels: rows, xs: rows.map(function (o) { return o.x; }), tips: rows.map(function (o) { return o.lab; }), series: [{ name: '财政收入', color: P[2], vals: rows.map(function (o) { return cv(inc(o.r)); }) }, { name: '建设与运营支出', color: P[1], vals: rows.map(function (o) { return cv(exp(o.r)); }) }].concat(anyDebt ? [{ name: '偿债', color: P[6], vals: rows.map(function (o) { return cv(svc(o.r)); }) }] : []), fmt: fm, axisFmt: axisYi, empty: '尚无完整月份的记录。' }));
     el.appendChild(cg);
-    // 车站商业（TOD，v2.3）：开发情况、营运收入构成、票款与商业收入的走势、收入最高的车站
+    // 车站商业（v2.0）：商业改造项目开发情况、营运收入构成、票款与商业收入的走势、收入最高的车站
     if (CM.TOD) {
       const T = CM.TOD, mn = g.model.net, sd = g.model.dailyStale ? null : g.model.stDaily, C = mn ? mn.C : null, dev = [];
       if (C && sd) C.stations.forEach(function (s, k) {
-        const st = g.net.stations[s.id]; if (!st || !st.tod || k >= sd.inn.length) return;
-        const flow = sd.inn[k] + sd.out[k] + sd.xfer[k], hub = C.stationLines[k].size >= 2;
-        dev.push({ name: st.name, lv: st.tod, flow: flow, hub: hub, month: (T.stationDaily(st.tod, flow, hub, g.clock.y, g) - T.stationCost(st.tod, g.clock.y, st.size, hub)) * 30.4 });
+        const st = g.net.stations[s.id]; if (!st || !T.projectCount(st) || k >= sd.inn.length) return;
+        const flow = sd.inn[k] + sd.out[k] + sd.xfer[k], hub = C.stationLines[k].size >= 2, bz = T.bizDaily(g, st, flow, hub, g.clock.y);
+        dev.push({ name: st.name, n: T.projectCount(st), flow: flow, hub: hub, month: (bz.rev - bz.cost) * 30.4 });
       });
       dev.sort(function (a, b) { return b.month - a.month; });
       const L12 = E.ledger.slice(-12), sum = function (k) { return L12.reduce(function (a, r) { return a + (r[k] || 0); }, 0); };
       const com = sum('commerce') - sum('todCost'), fare = sum('fare'), ops = sum('ops'), monthly = dev.reduce(function (a, o) { return a + o.month; }, 0);
-      const lvN = [0, 0, 0, 0]; for (const o of dev) lvN[o.lv]++;
-      el.appendChild(h('div', { class: 'fs-h' }, CM.icon('bag', 16), h('b', null, '车站商业（TOD）'), h('span', { class: 'tiny muted' }, '高客流车站的广告、商铺与上盖物业收入；在车站详情或地图快捷按钮中开发')));
+      el.appendChild(h('div', { class: 'fs-h' }, CM.icon('bag', 16), h('b', null, '车站商业（商业改造）'), h('span', { class: 'tiny muted' }, '广告、商铺、办公、酒店等商业项目收入；在车站详情的「商业开发」中建设')));
       const kg = h('div', { class: 'kpi-grid' });
       kg.append(
-        kpi({ icon: 'bag', badge: 'b-gold', label: '已开发车站', value: String(dev.length), unit: '站', vals: [], note: dev.length ? '广告 ' + lvN[1] + ' · 商业街 ' + lvN[2] + ' · 站城一体 ' + lvN[3] : '在车站详情或地图快捷按钮中开发' }),
-        kpi({ icon: 'coin', badge: monthly < 0 ? 'b-red' : 'b-green', label: '车站商业月净收益', value: fm(monthly), vals: E.ledger.slice(-12).map(function (r) { return (r.commerce || 0) - (r.todCost || 0); }), note: '收入减运营与维护成本，按当前客流估算' }),
+        kpi({ icon: 'bag', badge: 'b-gold', label: '有商业项目的车站', value: String(dev.length), unit: '站', vals: [], note: dev.length ? '共 ' + dev.reduce(function (a, o) { return a + o.n; }, 0) + ' 个项目' : '在车站详情中建设商业项目' }),
+        kpi({ icon: 'coin', badge: monthly < 0 ? 'b-red' : 'b-green', label: '商业项目月净收益', value: fm(monthly), vals: E.ledger.slice(-12).map(function (r) { return (r.commerce || 0) - (r.todCost || 0); }), note: '收入减维护成本，按当前客流估算' }),
         kpi({ icon: 'wallet', badge: 'b-blue', label: '近一年营运收入中的商业占比', value: fare + com > 0 ? U.fmtPct(com / (fare + com), 1) : '—', vals: [], note: ops > 0 ? '（票款 + 商业）覆盖运营费用 ' + U.fmtPct((fare + com) / ops, 0) : '尚无运营费用' }));
       el.appendChild(kg);
       const tg = h('div', { class: 'chart-grid' });
@@ -366,9 +365,9 @@
         lineChart({ title: '票款与车站商业收入', sub: (E.ledger.length > 36 ? '按年' : '按月') + '合计；两者合计越接近运营费用，越不依赖拨款', icon: 'bag', labels: rows, xs: rows.map(function (o) { return o.x; }), tips: rows.map(function (o) { return o.lab; }),
           series: [{ name: '票款', color: P[0], vals: rows.map(function (o) { return cv(o.r.fare || 0); }) }, { name: '车站商业', color: P[4] || P[3], vals: rows.map(function (o) { return cv(o.r.commerce || 0); }) }, { name: '运营费用', color: P[1], vals: rows.map(function (o) { return cv(o.r.ops || 0); }) }],
           fmt: fm, axisFmt: axisYi, empty: '尚无完整月份的记录。' }),
-        hbarChart({ title: '商业净收益最高的车站', sub: '每月估算（按周平均客流，扣除运营与维护成本）；换乘站收入 ×' + T.HUB, icon: 'station', fmt: fm, valCol: '每月净收益',
-          items: dev.slice(0, 8).map(function (o) { return { name: o.name, v: o.month, color: ['', P[2], P[3], P[4] || P[0]][o.lv], tip: [{ name: '开发等级', v: T.LEVELS[o.lv].name }, { name: '日客流', v: U.fmtPeople(o.flow) + ' 人次' }, { name: '每月净收益', v: fm(o.month) }].concat(o.hub ? [{ name: '换乘站', v: '×' + T.HUB }] : []) }; }),
-          empty: '还没有开发商业空间的车站。高客流车站可以在车站详情或地图快捷按钮中开发。' }));
+        hbarChart({ title: '商业净收益最高的车站', sub: '每月估算（按周平均客流，扣除维护成本）', icon: 'station', fmt: fm, valCol: '每月净收益',
+          items: dev.slice(0, 8).map(function (o) { return { name: o.name, v: o.month, color: ['', P[2], P[3], P[4] || P[0]][Math.min(3, o.n)], tip: [{ name: '商业项目', v: o.n + ' 个' }, { name: '日客流', v: U.fmtPeople(o.flow) + ' 人次' }, { name: '每月净收益', v: fm(o.month) }].concat(o.hub ? [{ name: '换乘站', v: '×' + T.HUB }] : []) }; }),
+          empty: '还没有商业项目的车站。可以在车站详情「商业开发」中建设。' }));
       el.appendChild(tg);
     }
   }

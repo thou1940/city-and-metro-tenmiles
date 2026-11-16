@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // 地图交互与建设工具：选择、建站、绘线、修改、拆除；平移缩放与快捷键
 (function (CM) {
   const AX = CM.Accessibility;
@@ -11,6 +11,8 @@
     this.buildType = 'underground'; this.stationSize = 'M';
     this.lineChoice = 'new';
     this.newLineColor = null; this.newLineSpeed = null;
+    // 新线制式与默认站台（社区扩展）：制式决定车速、编组档位与站台标准
+    this.newLineSys = null; this.newLineCars = null;
     this.curveMode = CM.Settings.get('curveMode') === 'pass' ? 'pass' : 'smooth';   // 绘线线形（v2.1）
     this.chain = null; this.bends = []; this.transitionPoint = null; this.placingTransition = false;
     this.cursor = null; this.hover = null; this.hint = null; this.meas = { pts: [], done: false };
@@ -291,7 +293,8 @@
   // 依次点击量距离：总长、步行与乘车时间、按约 1 km 站距的车站数和建设费（按所选建设方式粗略估算，实际以草案为准）
   Tools.prototype.clearMeasure = function () { this.meas = { pts: [], done: false }; this.ui.renderToolOpts(); };
   Tools.prototype.measureInfo = function (pts) {
-    const g = this.game(), city = g.city, y = g.clock.y, kmh = this.newLineSpeed || 80;
+    const g = this.game(), city = g.city, y = g.clock.y, sysId = this.newLineSys || 'metro';
+    const sys = CM.Std.sys(sysId), kmh = this.newLineSpeed || sys.defaultSpeed;
     let len = 0, water = 0;
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1], b = pts[i], d = U.dist(a[0], a[1], b[0], b[1]), n = Math.max(1, Math.ceil(d / 0.5));
@@ -299,7 +302,8 @@
       for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; if (city.waterDistAt(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t) < 0) water += d / n; }
     }
     const lenM = len * CFG.CELL_M, waterM = water * CFG.CELL_M, stations = lenM >= CFG.metro.minSpacingM ? Math.max(2, Math.round(lenM / 1000) + 1) : 0;
-    const cost = stations ? M.trackCost({ lenM: lenM, waterM: waterM, hillM: 0, protM: 0 }, this.buildType, y) + stations * M.stationCost(this.buildType, this.stationSize, y) : 0;
+    const cars = this.newLineCars || CM.Std.lineCars({ sys: sysId });
+    const cost = stations ? M.trackCost({ lenM: lenM, waterM: waterM, hillM: 0, protM: 0 }, this.buildType, y, sysId) + stations * (M.stationCost(this.buildType, this.stationSize, y, sysId) + M.platformCost(this.buildType, cars, sysId, y)) : 0;
     return { lenM: lenM, waterM: waterM, stations: stations, cost: cost, kmh: kmh, walk: lenM / CFG.walk.mPerMin, ride: lenM / 1000 / kmh * 60 * 1.1 + Math.max(0, stations - 2) * (CFG.metro.dwell || 30) / 60 };
   };
   Tools.prototype.measureTip = function () {
@@ -427,7 +431,7 @@
   // 当前绘制线路允许的最小转弯半径（米）：延长既有线路按该线的运行速度，新线路按选定的运行速度
   Tools.prototype.drawMinRadius = function () {
     const L = this.chain && this.net().lines[this.lineChoice];
-    return L ? M.minRadius(L) : M.minRadius({ speed: this.newLineSpeed });
+    return L ? M.minRadius(L) : M.minRadius({ speed: this.newLineSpeed, sys: this.newLineSys || 'metro' });
   };
   // 放下车站前预览站名（v2.5 玩家反馈）：与放下时的取名规则相同（M.addStation、M.splitSegment）；按位置与线网版本缓存
   Tools.prototype.previewName = function (x, y) {
@@ -471,18 +475,23 @@
     }
     const A = net.stations[this.chain];
     if (!A) return null;
+    // 本段所属线路的制式与站台标准（延长既有线路沿用该线；新线路用工具里选的）
+    const curLid = this.lineChoice !== 'new' && net.lines[this.lineChoice] ? this.lineChoice : null;
+    const sysId = curLid ? M.lineSystem(net.lines[curLid]) : (this.newLineSys || 'metro');
+    const sys = CM.Std.sys(sysId);
+    const cars = curLid ? CM.Std.lineCars(net.lines[curLid]) : (this.newLineCars || CM.Std.lineCars({ sys: sysId }));
     let end = [w.x, w.y], newSt = true;
     if (st) { end = [net.stations[st].x, net.stations[st].y]; newSt = false; }
     const pv = this.previewGeom(end, !mod && st ? st : null);
     const geo = pv.geo;
     const parts = geo.parts || [{ g:geo, type:pv.type }];
-    let cost = pv.host ? 0 : parts.reduce((sum, p) => sum + M.trackCost(p.g, p.type, g.clock.y), 0);
-    if (newSt && !mod && !seg) cost += M.stationCost(this.buildType, this.stationSize, g.clock.y);
+    let cost = pv.host ? 0 : parts.reduce((sum, p) => sum + M.trackCost(p.g, p.type, g.clock.y, sysId), 0);
+    if (newSt && !mod && !seg) cost += M.stationCost(this.buildType, this.stationSize, g.clock.y, sysId) + M.platformCost(this.buildType, cars, sysId, g.clock.y);
     // 风景区环境保护费（v2.2）：与施工方案同一算法计入预览造价，并单独列出
     const endC = g.city.cellAt(end[0], end[1]);
-    const envT = pv.host ? 0 : parts.reduce((sum, p) => sum + M.envTrackFee(p.g, p.type, g.clock.y), 0);
-    const envS = newSt && !mod && !seg && endC >= 0 && g.city.regions[g.city.region[endC]].scenic ? M.envStationFee(this.buildType, this.stationSize, g.clock.y) : 0;
-    const herS = newSt && !mod && !seg ? M.heritageStationFee(g.city, end[0], end[1], this.buildType, this.stationSize, g.clock.y) : 0;
+    const envT = pv.host ? 0 : parts.reduce((sum, p) => sum + M.envTrackFee(p.g, p.type, g.clock.y, sysId), 0);
+    const envS = newSt && !mod && !seg && endC >= 0 && g.city.regions[g.city.region[endC]].scenic ? M.envStationFee(this.buildType, this.stationSize, g.clock.y, sysId) : 0;
+    const herS = newSt && !mod && !seg ? M.heritageStationFee(g.city, end[0], end[1], this.buildType, this.stationSize, g.clock.y, sysId) : 0;
     cost += envT + envS + herS;
     const lines = pv.host ? ['沿用 ' + (net.lines[pv.host.line] ? net.lines[pv.host.line].name : '') + ' 的既有轨道（共线运营），不另收建设费', '需要单独建轨道时，先 Shift+点击加一个转弯点']
       : ['长度 ' + U.fmtKm(geo.lenM) + (geo.waterM > 1 ? '，' + (this.buildType === 'underground' ? '越江隧道 ' : '跨江桥梁 ') + U.fmtKm(geo.waterM) : '') + ' · 约 ' + U.fmtMoney(cost)];
@@ -707,7 +716,17 @@
     const r = g.edit(function (net) {
       let lid = self.lineChoice;
       const created = lid === 'new' || !net.lines[lid];
-      if (created) { lid = M.newLine(net); if (self.newLineColor) net.lines[lid].color = self.newLineColor; if (self.newLineSpeed && self.newLineSpeed !== 80) net.lines[lid].speed = self.newLineSpeed; }
+      if (created) {
+        lid = M.newLine(net);
+        if (self.newLineColor) net.lines[lid].color = self.newLineColor;
+        // 制式、站台标准与速度（社区扩展）
+        const sysId = self.newLineSys || 'metro';
+        CM.Std.setLineSystem(net, lid, sysId);
+        const sys = CM.Std.sys(sysId);
+        if (self.newLineCars) net.lines[lid].platCars = self.newLineCars;
+        delete net.lines[lid].ptype;
+        if (self.newLineSpeed && self.newLineSpeed !== sys.defaultSpeed) net.lines[lid].speed = self.newLineSpeed;
+      }
       let to = st;
       if (!to && seg) { const sp = M.splitSegment(net, seg, w.x, w.y, opts, g.city); if (sp.error) return sp; to = sp.station; }
       if (!to) to = M.addStation(net, w.x, w.y, opts, g.city);
@@ -1058,9 +1077,9 @@
       polyPath(ctx, R, cs.g.pts, hh);
       ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = R.lineWidthPx() + 7; ctx.stroke();
       ctx.strokeStyle = col; ctx.lineWidth = R.lineWidthPx() + 2; ctx.stroke();
-      const grade = M.segmentGrade(net, cs.seg), minR = grade.minR, ts = M.tightStretch(cs.g, minR);
+      const scale = M.lineSys(net.lines[cs.seg.line] || {}).radiusMul, grade = M.segmentGrade(net, cs.seg), minR = Math.round(grade.minR * scale), ts = M.tightStretch(cs.g, minR);
       for (const run of ts.stretch) { polyPath(ctx, R, run, hh); ctx.strokeStyle = 'rgba(214,48,49,0.95)'; ctx.lineWidth = R.lineWidthPx() + 3; ctx.stroke(); }
-      if (isFinite(cs.g.minRadiusM) && cs.g.minRxy && cs.g.minRadiusM < grade.warnR * 1.5) {
+      if (isFinite(cs.g.minRadiusM) && cs.g.minRxy && cs.g.minRadiusM < grade.warnR * scale * 1.5) {
         const bad = cs.g.minRadiusM < minR, q = R.P(cs.g.minRxy[0], cs.g.minRxy[1], hh);
         tag(ctx, q.x, q.y - 22, (bad ? '弯道过急 ' : '最小半径 ') + Math.round(cs.g.minRadiusM) + ' m' + (bad ? ' < ' + minR : ' ✓'), bad ? 'rgba(214,48,49,0.92)' : 'rgba(32,160,90,0.92)');
         if (bad && ts.circle) turnCircles(ctx, R, ts.circle, hh);
@@ -1212,7 +1231,7 @@
         else if (sel && sel.kind === 'station') for (const id in net.segments) { const s = net.segments[id]; if (s.a === sel.id || s.b === sel.id) ids.push(id); }
         for (const id of ids) {
           const s = net.segments[id]; if (!s || s.curve !== 'arc') continue;
-          const gm = M.segGeom(net, s, g.city), minR = M.segmentGrade(net, s).minR, hh = R.trackH(s.type);
+          const gm = M.segGeom(net, s, g.city), minR = Math.round(M.segmentGrade(net, s).minR * M.lineSys(net.lines[s.line] || {}).radiusMul), hh = R.trackH(s.type);
           for (const a of gm.arcs || []) { const rm = a.r * CFG.CELL_M; if (rm > 5000) continue; const q = R.P(a.x, a.y, hh); tag(ctx, q.x, q.y - 16, 'R ' + (Math.round(rm / 10) * 10), rm < minR ? 'rgba(214,48,49,0.92)' : 'rgba(40,60,90,0.82)'); }
         }
       }

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // 各城任务的复合条件（economy.js 的 Tasks.withPlan 按任务编号套用）：原任务的目标成为主体，这里再加上这座城市真正要考核的东西。
 // base：把主体换成更严格的判定（如 direct：同一条线直达）；avoid：[地点, 半径（格）] 连通时不能经过这一带；
 // parts：附加条件，kind 分网络形态 net、覆盖范围 reach、运营结果 ops、成本收益 fin、发展效果 dev；
@@ -162,11 +162,11 @@
       sh6: { parts: [regCov(['yangpu'], '杨浦', 0.3)] },
       sh7: { parts: [hub('虹桥站', 2), fac('sh_hqstation', 0.25)] },
       sh8: { parts: [netLoad(1.2)] },
-      sh9: { avoid: ['陆家嘴', 8], parts: [regCov(['jinqiao'], '金桥·张江', 0.3)] },
+      sh9: { avoid: ['陆家嘴', 8], parts: [regCov(['waigaoqiao'], '金桥外高桥曹路', 0.3)] },
       sh10: { parts: [fac('sh_disney', 0.15)] },
       shd1: { parts: [cross(2, 200, '跨黄浦江轨道')] },
       shd2: { parts: [fac('sh_gubei', 0.15)] },
-      shd3: { parts: [commute(['dachang'], '大场·顾村', 0.08)] },
+      shd3: { parts: [commute(['baoshan'], '宝山区', 0.08)] },
       'sh-sc1': { parts: [cross(1, 200, '跨黄浦江轨道')] },
       'sh-g1': { parts: [fac('sh_zj', 0.15)] },
       'sh-g2': { parts: [fac('sh_south', 0.2)] },

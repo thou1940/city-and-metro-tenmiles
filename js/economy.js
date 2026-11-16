@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // 经营：资金、拨款、票款、运营费用、满意度、失败判定；任务：历史参考任务与动态任务
 (function (CM) {
   const U = CM.U, CFG = CM.CFG, D = CM.DATA;
@@ -60,38 +60,65 @@
   // 每人次收益以本城默认票价为基准、随价格指数上涨；客流很大时边际收益递减（商铺面积有限）。
   // 投入为同年中型地下站造价的比例 × 车站规模（换乘站面积更大、投入更多），一次支付、不退还。
   // 数值目标（v2.3 平衡）：日客流约 1 万人次的普通站，三级分别约 3 / 6 / 9 年回本；大型换乘枢纽约 1.5 / 2.5 / 4 年
-  // v2.5「经营不善也会亏钱」：开发后每年有运营、维护与财务成本（累计投入的 6% / 4.5% / 3.5%），日客流低于约 1,500 / 2,300 / 3,000 人次
-  // 的车站入不敷出（日客流 1 万人次的普通站约 3 / 7 / 14 年回本，大型枢纽仍很快）；商业街与站城一体的收入随城市经济周期涨落，衰退时更容易亏损
+  // 原 TOD 分级开发已取消：车站只建设商业改造项目，按客流产生收入并计提维护成本。
   const TOD = CM.TOD = {
-    LEVELS: [
-      { name: '未开发', k: 0, cost: 0, upkeep: 0, cyc: 0 },
-      { name: '广告与便利店', k: 0.06, cost: 0.0045, upkeep: 0.06, cyc: 0.4, desc: '站内灯箱广告与便利店' },
-      { name: '站内商业街', k: 0.15, cost: 0.022, upkeep: 0.045, cyc: 0.75, desc: '通道与站厅的连续商铺' },
-      { name: '站城一体开发', k: 0.3, cost: 0.075, upkeep: 0.035, cyc: 1, desc: '车站上盖与周边物业联合开发' },
-    ],
     HUB: 1.25,   // 两条及以上线路的换乘站
-    SIZE: { S: 0.7, M: 1, L: 1.5, XL: 2 },
+    SIZE: { S: 0.7, M: 1, L: 1.5, XL: 2, XXL: 2.6, HUB: 3.4 },
     pi: function (y) { return U.priceIndex(y, CFG.cost.inflation, CFG.econBase || 1990); },
-    cost: function (level, y, size, hub) { return TOD.LEVELS[level].cost * CFG.cost.station.underground.M * (TOD.SIZE[size] || 1) * (hub ? 1.3 : 1) * TOD.pi(y); },
-    // 经济周期系数：城市经济的商业系数（约 0.7–1.25），按等级的敏感度折算；没有城市经济的地图为 1。每月缓存一次
-    cycle: function (g, level) {
+    // 经济周期系数：城市经济的商业系数（约 0.7–1.25），按商业项目的敏感度折算；没有城市经济的地图为 1。每月缓存一次
+    cycle: function (g) {
       if (!g || !CM.Macro || !g.macro) return 1;
       const ym = g.ym(); if (!g._todCyc || g._todCyc.ym !== ym) { const f = CM.Macro.cityFactors(g); g._todCyc = { ym: ym, com: f ? U.clamp(f.com, 0.7, 1.25) : 1 }; }
-      return 1 + (g._todCyc.com - 1) * TOD.LEVELS[level].cyc;
+      return 1 + (g._todCyc.com - 1) * 0.75;
     },
-    // 单站日收入（万元）：flow 为当天进出站 + 换乘人次（12 万人次以上逐渐饱和）；g 给出时计入经济周期
-    stationDaily: function (level, flow, hub, y, g) { return flow / (1 + flow / 120000) * CFG.fareDefault.flat * TOD.LEVELS[level].k * (CFG.economy.todK || 1) * (hub ? TOD.HUB : 1) * TOD.pi(y) / 10000 * (g ? TOD.cycle(g, level) : 1); },
-    // 单站日成本（万元）：累计投入（到该等级为止）× 年成本率 ÷ 365
-    stationCost: function (level, y, size, hub) { return level ? TOD.cost(level, y, size, hub) * TOD.LEVELS[level].upkeep / 365 : 0; },
-    // 全网当天的商业收入与成本（万元）
+    // ======================== 商业改造项目 ========================
+    // 车站可按类型增建商业项目：广告、站内商业、购物中心、上盖写字楼 / 住宅 / 酒店、停车楼与文化展馆。
+    // 每个项目有站厅类型、换乘门槛；建成后按客流产生日收入并计提维护成本。
+    // k 的单位是「元/人次」：先算每天的商业营业额，再乘车站规模与换乘/文化系数；不是票价分成。
+    PROJECTS: {
+      ads: { id: 'ads', name: '广告与数字灯箱', short: '广告', k: 0.05, cost: 0.002, upkeep: 0.02, minSize: 'S', desc: '站厅、通道与站台的灯箱和数字屏，投入小、按客流计费' },
+      retail: { id: 'retail', name: '站内商业街', short: '站内商业', k: 0.33, cost: 0.04, upkeep: 0.02, minSize: 'M', desc: '付费区外的连续商铺、便利店与轻餐饮' },
+      mall: { id: 'mall', name: '地下／上盖购物中心', short: '购物中心', k: 0.8, cost: 0.15, upkeep: 0.018, minSize: 'L', desc: '与站厅直接连通的中型商业体，需要较宽的站厅与出入口' },
+      office: { id: 'office', name: '上盖写字楼', short: '写字楼', k: 0.8, cost: 0.22, upkeep: 0.015, minSize: 'XL', desc: '车站上盖办公塔楼，租金随站点客流与城市经济周期波动' },
+      resi: { id: 'resi', name: '上盖住宅', short: '上盖住宅', k: 0.55, cost: 0.16, upkeep: 0.012, minSize: 'L', desc: '站点上盖的住宅与公寓，收益稳定、维护成本较低' },
+      hotel: { id: 'hotel', name: '站上酒店', short: '酒店', k: 1.2, cost: 0.28, upkeep: 0.02, minSize: 'XL', hub: true, desc: '换乘枢纽上的酒店，需要两条及以上线路汇聚' },
+      park: { id: 'park', name: '停车楼与 P+R', short: '停车楼', k: 0.35, cost: 0.05, upkeep: 0.02, minSize: 'M', desc: '站旁的立体车库与换乘停车位，按进出站客流收取停车费' },
+      culture: { id: 'culture', name: '文化展馆与艺术中心', short: '文化展馆', k: 0.4, cost: 0.06, upkeep: 0.025, minSize: 'L', boost: 0.08, desc: '站内的展览、演出与公共艺术空间，收入不高，但提升其他商业项目 8% 的收益' },
+    },
+    PROJECT_ORDER: ['ads', 'retail', 'mall', 'office', 'resi', 'hotel', 'park', 'culture'],
+    projectCost: function (id, y, size, hub) { const P = TOD.PROJECTS[id]; return P ? P.cost * CFG.cost.station.underground.M * (TOD.SIZE[size] || 1) * (hub ? 1.2 : 1) * TOD.pi(y) : 0; },
+    projectCount: function (st) { return st && st.biz ? Object.keys(st.biz).filter(function (k) { return TOD.PROJECTS[k]; }).length : 0; },
+    projectBuiltCost: function (st, y, hub) { let v = 0; if (st && st.biz) for (const k in st.biz) if (TOD.PROJECTS[k]) v += TOD.projectCost(k, y, st.size, hub); return v; },
+    // 项目收益：日客流 × 每人次商业消费 × 车站规模 × 换乘溢价 × 文化加成 × 经济周期
+    projectDaily: function (id, flow, hub, y, g, size, culture) {
+      const P = TOD.PROJECTS[id]; if (!P) return 0;
+      const boost = culture && id !== 'culture' && TOD.PROJECTS.culture ? 1 + TOD.PROJECTS.culture.boost : 1;
+      return flow * P.k * (TOD.SIZE[size] || 1) * (hub ? 1.15 : 1) * boost * TOD.pi(y) / 10000 * (g ? TOD.cycle(g, 2) : 1);
+    },
+    projectUpkeepDaily: function (id, y, size, hub) { const P = TOD.PROJECTS[id]; return P ? TOD.projectCost(id, y, size, hub) * P.upkeep / 365 : 0; },
+    // 单个车站的商业项目日收入与日成本
+    bizDaily: function (g, st, flow, hub, y) {
+      const out = { rev: 0, cost: 0 }; if (!st || !st.biz) return out;
+      const culture = !!st.biz.culture;
+      for (const id in st.biz) if (TOD.PROJECTS[id]) { out.rev += TOD.projectDaily(id, flow, hub, y, g, st.size, culture); out.cost += TOD.projectUpkeepDaily(id, y, st.size, hub); }
+      return out;
+    },
+    // 项目门槛：规模、TOD 等级与换乘；返回 null 表示可以建设
+    bizReq: function (id, st, net, tod) {
+      const P = TOD.PROJECTS[id]; if (!P) return '未知项目';
+      if (CM.Std.sizeIndex(st.size) < CM.Std.sizeIndex(P.minSize)) return '需要' + CFG.metro.sizeName[P.minSize] + '及以上站厅';
+      if (P.hub && CM.Metro.stationLines(net, st.id).length < 2) return '需要两条及以上线路换乘';
+      return null;
+    },
+    // 全网当天的商业收入与成本（万元）：只统计商业改造项目，原 TOD 开发已取消
     daily: function (g, dt) {
       const m = g.model, C = m.net ? m.net.C : null, sd = dt === 'we' ? m.stDailyWe : m.stDailyWk, out = { rev: 0, cost: 0 }; if (!C) return out;
       const y = g.clock.y, live = sd && !m.dailyStale;
       for (let i = 0; i < C.stations.length; i++) {
-        const s = g.net.stations[C.stations[i].id], lv = s && s.tod; if (!lv) continue;
-        const hub = C.stationLines[i].size >= 2;
-        if (live && i < sd.inn.length) out.rev += TOD.stationDaily(lv, sd.inn[i] + sd.out[i] + sd.xfer[i], hub, y, g);
-        out.cost += TOD.stationCost(lv, y, s.size, hub);
+        const s = g.net.stations[C.stations[i].id]; if (!s || !s.biz) continue;
+        const hub = C.stationLines[i].size >= 2, flow = live && i < sd.inn.length ? sd.inn[i] + sd.out[i] + sd.xfer[i] : 0;
+        const bz = TOD.bizDaily(g, s, flow, hub, y);
+        out.rev += bz.rev; out.cost += bz.cost;
       }
       return out;
     },
@@ -167,8 +194,8 @@
     if (!this.isFree()) {
       const c = this.cur, when = { y: c.y, m: c.m, d: U.daysInMonth(c.y, c.m) };
       if (c.fare > 0.5) this.log('fare', c.fare, 'gen', '本月票款（' + c.days + ' 天' + (c.wdDays || c.weDays ? '：' + (c.wdDays || 0) + ' 个工作日、' + (c.weDays || 0) + ' 个周末日' : '') + '）', when);
-      if (c.commerce > 0.5) this.log('commerce', c.commerce, 'gen', '本月车站商业收入（广告与租金）', when);
-      if (c.todCost > 0.5) this.log('ops', -c.todCost, 'gen', '本月车站商业运营与维护成本', when);
+      if (c.commerce > 0.5) this.log('commerce', c.commerce, 'gen', '本月车站商业与物业收入（广告、租金、上盖项目）', when);
+      if (c.todCost > 0.5) this.log('ops', -c.todCost, 'gen', '本月车站商业与物业运营维护成本', when);
       if (c.ops > 0.5) this.log('ops', -c.ops, 'gen', '本月运营成本（' + c.days + ' 天）', when);
     }
     this.cur.closed = true;
@@ -831,10 +858,11 @@
     let n = 0, net = 0;
     if (!C || !T) return { n: 0, net: 0 };
     for (const id in g.net.stations) {
-      const s = g.net.stations[id], lv = s.tod || 0, k = C.sIndex.get(id);
-      if (!lv || k === undefined || !C.serviced[k] || (inside && !inside(s.x, s.y))) continue;
+      const s = g.net.stations[id], k = C.sIndex.get(id);
+      if (!s.biz || !T.projectCount(s) || k === undefined || !C.serviced[k] || (inside && !inside(s.x, s.y))) continue;
       const flow = sd && k < sd.inn.length ? sd.inn[k] + sd.out[k] + sd.xfer[k] : 0, hub = !!(C.stationLines[k] && C.stationLines[k].size >= 2);
-      n++; net += (T.stationDaily(lv, flow, hub, y, g) - T.stationCost(lv, y, s.size, hub)) * 30.4;
+      const bz = T.bizDaily(g, s, flow, hub, y);
+      n++; net += (bz.rev - bz.cost) * 30.4;
     }
     return { n: n, net: net };
   };
@@ -985,12 +1013,13 @@
         const rt = Tasks.routeThrough(g, t.anchors);
         if (!rt.all) return { ok: false, value: 0, text: '线路建成后核算造价（目标 ≤ ' + U.fmtMoney(t.budget) + '）' };
         const r = rt.route, y = t.y0 || g.clock.y; let v = 0;
-        for (let k = rt.i0; k <= rt.i1; k++) { const st = C.stations[r.stIdx[k]]; if (st) v += M.stationCost(st.type, st.size, y); if (k < rt.i1) for (const ref of r.legSegs[k] || []) { const cs = C.segs.get(ref.id); if (cs) v += M.trackCost(cs.g, cs.seg.type, y); } }
+        const sysId = M.lineSystem(C.net.lines[r.lineId] || {});
+        for (let k = rt.i0; k <= rt.i1; k++) { const st = C.stations[r.stIdx[k]]; if (st) { const p = CM.Std.pf(C.net, st.id, r.lineId); v += M.stationCost(st.type, st.size, y, sysId) + CM.Metro.platformCost(st.type, p.cars, sysId, y); } if (k < rt.i1) for (const ref of r.legSegs[k] || []) { const cs = C.segs.get(ref.id); if (cs) v += M.trackCost(cs.g, cs.seg.type, y, sysId); } }
         return { ok: v <= t.budget, value: atMost(v, t.budget), text: '这段线路造价 ' + U.fmtMoney(v) + ' / 目标 ≤ ' + U.fmtMoney(t.budget) };
       }
-      case 'todNet': {   // 车站商业（站城开发）：座数与每月净收益
+      case 'todNet': {   // 车站商业项目：座数与每月净收益
         const s = Tasks.todStats(g, t.regions), okN = s.n >= (t.stations || 1), okV = s.net > (t.net || 0);
-        return { ok: okN && okV, value: (Math.min(1, s.n / (t.stations || 1)) + (okV ? 1 : 0)) / 2, text: (t.areaName || '全网') + '站城开发 ' + s.n + ' 座 / 目标 ' + (t.stations || 1) + ' 座 · 每月净收益 ' + (s.net < 0 ? '−' : '') + U.fmtMoney(Math.abs(s.net)) + (t.net ? ' / 目标 ≥ ' + U.fmtMoney(t.net) : '（需为正）') };
+        return { ok: okN && okV, value: (Math.min(1, s.n / (t.stations || 1)) + (okV ? 1 : 0)) / 2, text: (t.areaName || '全网') + '有商业项目的车站 ' + s.n + ' 座 / 目标 ' + (t.stations || 1) + ' 座 · 每月净收益 ' + (s.net < 0 ? '−' : '') + U.fmtMoney(Math.abs(s.net)) + (t.net ? ' / 目标 ≥ ' + U.fmtMoney(t.net) : '（需为正）') };
       }
       // ---- 发展效果 ----
       case 'regionPull': {   // 片区内带动较强的车站（与地图上「地铁带动」的标注同一标准：换乘、客流和商业开发都能提高）。自然增长不修地铁也会涨，不作为考核

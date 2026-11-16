@@ -673,7 +673,7 @@
     const before = this.net.stations[id], after = this.draft.net.stations[id], edits = [];
     if (!before || !after) return edits;
     if (before.size !== after.size) edits.push('规模');
-    if ((before.tod || 0) !== (after.tod || 0)) edits.push('商业开发');
+    if (JSON.stringify(before.biz || {}) !== JSON.stringify(after.biz || {})) edits.push('商业项目');
     if (before.x !== after.x || before.y !== after.y) edits.push('位置');
     if (before.type !== after.type || M.stationLevel(before) !== M.stationLevel(after)) edits.push('标高');
     if (M.platDirsChanged(this.net, this.draft.net, id)) edits.push('站台方向');
@@ -697,7 +697,8 @@
     for (const id of selected) {
       if (!this.draftStationEdits(id).length) continue;
       const s = plan.stations[id];
-      Object.assign(net.stations[id], { size:s.size, x:s.x, y:s.y, type:s.type, elev:s.elev, hillEntrance:s.hillEntrance, tod:s.tod });
+      Object.assign(net.stations[id], { size:s.size, x:s.x, y:s.y, type:s.type, elev:s.elev, hillEntrance:s.hillEntrance });
+      if (s.biz && Object.keys(s.biz).length) net.stations[id].biz = Object.assign({}, s.biz); else delete net.stations[id].biz;
       const station = net.stations[id];
       station.lv = Object.fromEntries(M.stationLines(this.net, id).map(lid =>
         [lid, M.platType(plan.lines[lid] ? s : this.net.stations[id], lid)]));
@@ -1023,7 +1024,7 @@
       const s = C.stations[i], st = this.net.stations[s.id]; if (!st || (C.serviced && !C.serviced[i])) continue;
       const age = st.built ? now - st.built[0] - (st.built[1] - 1) / 12 : G.years, x = U.clamp(age / G.years, 0, 1), ramp = 1 - (1 - x) * (1 - x);
       const lines = C.stationLines[i] ? C.stationLines[i].size : 1, flow = sd ? sd.inn[i] + sd.out[i] + sd.xfer[i] : 0;
-      const k = (G.base + G.xfer * Math.max(0, lines - 1) + G.flow * Math.min(1, flow / G.flowFull) + (G.tod[st.tod || 0] || 0)) * ramp;
+      const k = (G.base + G.xfer * Math.max(0, lines - 1) + G.flow * Math.min(1, flow / G.flowFull)) * ramp;
       if (k <= 0.001) continue;
       top.push({ name: st.name, x: s.x, y: s.y, k: k });
       const i0 = Math.max(0, Math.floor(s.x - R)), i1 = Math.min(W - 1, Math.ceil(s.x + R)), j0 = Math.max(0, Math.floor(s.y - R)), j1 = Math.min(H - 1, Math.ceil(s.y + R));
